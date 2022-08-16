@@ -13,9 +13,18 @@ from homeassistant.const import (
 from .common import LocalTuyaEntity, async_setup_entry
 from .const import CONF_SCALING
 
+from homeassistant.helpers.entity import EntityCategory
+
+import base64
+
 _LOGGER = logging.getLogger(__name__)
 
 DEFAULT_PRECISION = 2
+
+CONF_LOCALTUYA_SENSOR_ENCODING = "encoding"
+CONF_LOCALTUYA_SENSOR_BYTES = "bytes"
+CONF_LOCALTUYA_SENSOR_BYTE_OFFSET = "byte_offset"
+CONF_LOCALTUYA_SENSOR_CATEGORY = "entity_category"
 
 
 def flow_schema(dps):
@@ -24,8 +33,12 @@ def flow_schema(dps):
         vol.Optional(CONF_UNIT_OF_MEASUREMENT): str,
         vol.Optional(CONF_DEVICE_CLASS): vol.In(DEVICE_CLASSES),
         vol.Optional(CONF_SCALING): vol.All(
-            vol.Coerce(float), vol.Range(min=-1000000.0, max=1000000.0)
+            vol.Coerce(float), vol.Range(min=-1000000.0, max=1000000.0),
         ),
+        vol.Optional(CONF_LOCALTUYA_SENSOR_ENCODING): str,
+        vol.Optional(CONF_LOCALTUYA_SENSOR_BYTES): int,
+        vol.Optional(CONF_LOCALTUYA_SENSOR_BYTE_OFFSET): int,
+        vol.Optional(CONF_LOCALTUYA_SENSOR_CATEGORY): str,
     }
 
 
@@ -54,6 +67,14 @@ class LocaltuyaSensor(LocalTuyaEntity):
         return self._config.get(CONF_DEVICE_CLASS)
 
     @property
+    def entity_category(self):
+        """Return the class of this device."""
+        if self.has_config(CONF_LOCALTUYA_SENSOR_CATEGORY):
+            return EntityCategory(self._config.get(CONF_LOCALTUYA_SENSOR_CATEGORY))
+        else:
+            return None
+
+    @property
     def unit_of_measurement(self):
         """Return the unit of measurement of this entity, if any."""
         return self._config.get(CONF_UNIT_OF_MEASUREMENT)
@@ -61,10 +82,22 @@ class LocaltuyaSensor(LocalTuyaEntity):
     def status_updated(self):
         """Device status was updated."""
         state = self.dps(self._dp_id)
-        scale_factor = self._config.get(CONF_SCALING)
-        if scale_factor is not None and isinstance(state, (int, float)):
-            state = round(state * scale_factor, DEFAULT_PRECISION)
-        self._state = state
+        if state is not None:
+            scale_factor = self._config.get(CONF_SCALING)
+            encoding = self._config.get(CONF_LOCALTUYA_SENSOR_ENCODING)
+            nbytes = self._config.get(CONF_LOCALTUYA_SENSOR_BYTES)
+            byte_offset = self._config.get(CONF_LOCALTUYA_SENSOR_BYTE_OFFSET)
+            if encoding is not None:
+                state = state.encode('ascii')
+                if encoding == "base64":
+                    state = base64.b64decode(state)
+                if nbytes is not None:
+                    state = int.from_bytes(state[byte_offset:byte_offset + nbytes], "big")
+                else:
+                    state = int.from_bytes(state, "big")
+            if scale_factor is not None and isinstance(state, (int, float)):
+                state = round(state * scale_factor, DEFAULT_PRECISION)
+            self._state = state
 
 
 async_setup_entry = partial(async_setup_entry, DOMAIN, LocaltuyaSensor, flow_schema)
