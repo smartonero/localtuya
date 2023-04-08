@@ -3,7 +3,8 @@ import logging
 from functools import partial
 
 import voluptuous as vol
-from homeassistant.components.sensor import DEVICE_CLASSES, DOMAIN
+from homeassistant.components.sensor import SensorStateClass, DEVICE_CLASSES, STATE_CLASSES, DOMAIN
+from homeassistant.components.sensor.const import CONF_STATE_CLASS
 from homeassistant.const import (
     CONF_DEVICE_CLASS,
     CONF_UNIT_OF_MEASUREMENT,
@@ -13,9 +14,18 @@ from homeassistant.const import (
 from .common import LocalTuyaEntity, async_setup_entry
 from .const import CONF_SCALING
 
+from homeassistant.helpers.entity import EntityCategory
+
+import base64
+
 _LOGGER = logging.getLogger(__name__)
 
 DEFAULT_PRECISION = 2
+
+CONF_LOCALTUYA_SENSOR_ENCODING = "encoding"
+CONF_LOCALTUYA_SENSOR_BYTES = "bytes"
+CONF_LOCALTUYA_SENSOR_BYTE_OFFSET = "byte_offset"
+CONF_LOCALTUYA_SENSOR_CATEGORY = "entity_category"
 
 
 def flow_schema(dps):
@@ -23,14 +33,21 @@ def flow_schema(dps):
     return {
         vol.Optional(CONF_UNIT_OF_MEASUREMENT): str,
         vol.Optional(CONF_DEVICE_CLASS): vol.In(DEVICE_CLASSES),
+        vol.Optional(CONF_STATE_CLASS): vol.In(STATE_CLASSES),
         vol.Optional(CONF_SCALING): vol.All(
-            vol.Coerce(float), vol.Range(min=-1000000.0, max=1000000.0)
+            vol.Coerce(float), vol.Range(min=-1000000.0, max=1000000.0),
         ),
+        vol.Optional(CONF_LOCALTUYA_SENSOR_ENCODING): str,
+        vol.Optional(CONF_LOCALTUYA_SENSOR_BYTES): int,
+        vol.Optional(CONF_LOCALTUYA_SENSOR_BYTE_OFFSET): int,
+        vol.Optional(CONF_LOCALTUYA_SENSOR_CATEGORY): str,
     }
 
 
 class LocaltuyaSensor(LocalTuyaEntity):
     """Representation of a Tuya sensor."""
+    
+#    _attr_state_class: SensorStateClass | str | None
 
     def __init__(
         self,
@@ -42,6 +59,7 @@ class LocaltuyaSensor(LocalTuyaEntity):
         """Initialize the Tuya sensor."""
         super().__init__(device, config_entry, sensorid, _LOGGER, **kwargs)
         self._state = STATE_UNKNOWN
+        self._attr_state_class: SensorStateClass | str | None = self._config.get(CONF_STATE_CLASS)
 
     @property
     def state(self):
@@ -53,6 +71,19 @@ class LocaltuyaSensor(LocalTuyaEntity):
         """Return the class of this device."""
         return self._config.get(CONF_DEVICE_CLASS)
 
+#    @property
+#    def state_class(self):
+#        """Return the state class of this device."""
+#        return self._config.get(CONF_STATE_CLASS)
+
+    @property
+    def entity_category(self):
+        """Return the class of this device."""
+        if self.has_config(CONF_LOCALTUYA_SENSOR_CATEGORY):
+            return EntityCategory(self._config.get(CONF_LOCALTUYA_SENSOR_CATEGORY))
+        else:
+            return None
+
     @property
     def unit_of_measurement(self):
         """Return the unit of measurement of this entity, if any."""
@@ -61,10 +92,22 @@ class LocaltuyaSensor(LocalTuyaEntity):
     def status_updated(self):
         """Device status was updated."""
         state = self.dps(self._dp_id)
-        scale_factor = self._config.get(CONF_SCALING)
-        if scale_factor is not None and isinstance(state, (int, float)):
-            state = round(state * scale_factor, DEFAULT_PRECISION)
-        self._state = state
+        if state is not None:
+            scale_factor = self._config.get(CONF_SCALING)
+            encoding = self._config.get(CONF_LOCALTUYA_SENSOR_ENCODING)
+            nbytes = self._config.get(CONF_LOCALTUYA_SENSOR_BYTES)
+            byte_offset = self._config.get(CONF_LOCALTUYA_SENSOR_BYTE_OFFSET)
+            if encoding is not None:
+                state = state.encode('ascii')
+                if encoding == "base64":
+                    state = base64.b64decode(state)
+                if nbytes is not None:
+                    state = int.from_bytes(state[byte_offset:byte_offset + nbytes], "big")
+                else:
+                    state = int.from_bytes(state, "big")
+            if scale_factor is not None and isinstance(state, (int, float)):
+                state = round(state * scale_factor, DEFAULT_PRECISION)
+            self._state = state
 
 
 async_setup_entry = partial(async_setup_entry, DOMAIN, LocaltuyaSensor, flow_schema)

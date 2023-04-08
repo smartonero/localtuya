@@ -125,7 +125,8 @@ class TuyaDevice(pytuya.TuyaListener, pytuya.ContextualLogger):
 
         # This has to be done in case the device type is type_0d
         for entity in config_entry[CONF_ENTITIES]:
-            self.dps_to_request[entity[CONF_ID]] = None
+#            self.dps_to_request[entity[CONF_ID]] = None
+            self.dps_to_request[str(int(entity[CONF_ID]) % 1000)] = None
 
     @property
     def connected(self):
@@ -317,7 +318,11 @@ class LocalTuyaEntity(RestoreEntity, pytuya.ContextualLogger):
     @property
     def unique_id(self):
         """Return unique device identifier."""
+#        if not self.has_config(CONF_FRIENDLY_NAME):
         return f"local_{self._config_entry.data[CONF_DEVICE_ID]}_{self._dp_id}"
+#        else:
+#            return f"local_{self._config_entry.data[CONF_DEVICE_ID]}_{self._config.get(CONF_FRIENDLY_NAME).replace(' ','_')}_{self._dp_id}"
+#        return f"local_{self._config_entry.data[CONF_DEVICE_ID]}_{self._dp_id}_{self._config_entry.data[CONF_FRIENDLY_NAME].replace(' ', '-')}"
 
     def has_config(self, attr):
         """Return if a config parameter has a valid value."""
@@ -327,10 +332,12 @@ class LocalTuyaEntity(RestoreEntity, pytuya.ContextualLogger):
     @property
     def available(self):
         """Return if device is available or not."""
-        return str(self._dp_id) in self._status
+        return str(int(self._dp_id) % 1000) in self._status
+#        return str(self._dp_id) in self._status
 
     def dps(self, dp_index):
         """Return cached value for DPS index."""
+        dp_index = int(dp_index) % 1000
         value = self._status.get(str(dp_index))
         if value is None:
             self.warning(
