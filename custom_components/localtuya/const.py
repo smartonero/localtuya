@@ -9,6 +9,10 @@ CONF_PROTOCOL_VERSION = "protocol_version"
 CONF_DPS_STRINGS = "dps_strings"
 CONF_PRODUCT_KEY = "product_key"
 
+CONF_DEFAULT_VALUE = "dps_default_value"
+#CONF_RESET_DPIDS = "reset_dpids"
+CONF_PASSIVE_ENTITY = "is_passive_entity"
+
 # light
 CONF_BRIGHTNESS_LOWER = "brightness_lower"
 CONF_BRIGHTNESS_UPPER = "brightness_upper"
@@ -81,6 +85,15 @@ CONF_FAULT_DP = "fault_dp"
 CONF_PAUSED_STATE = "paused_state"
 CONF_RETURN_MODE = "return_mode"
 CONF_STOP_STATUS = "stop_status"
+
+# number
+CONF_MIN_VALUE = "min_value"
+CONF_MAX_VALUE = "max_value"
+CONF_STEPSIZE_VALUE = "step_size"
+
+# States
+ATTR_STATE = "raw_state"
+CONF_RESTORE_ON_RECONNECT = "restore_on_reconnect"
 
 DATA_DISCOVERY = "discovery"
 
